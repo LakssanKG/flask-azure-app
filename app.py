@@ -1,6 +1,6 @@
 import os
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from azure.storage.blob import BlobServiceClient
 from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.core.credentials import AzureKeyCredential
@@ -15,7 +15,7 @@ AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
 
 # Upload File to Azure Blob Storage
-def upload_file(file_path, container_name="uploads"):
+def upload_file_to_blob(file_path, container_name="uploads"):
     blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=os.path.basename(file_path))
     
@@ -48,23 +48,24 @@ def summarize_text(text):
 # Flask Routes
 @app.route("/")
 def home():
-    return "Welcome to the Azure Document Summarizer API"
-
-from flask import Flask, request, jsonify
-
-app = Flask(__name__)
+    return render_template("index.html")  # Ensure templates/index.html exists
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
         return jsonify({"error": "No file provided"}), 400
-
+    
     file = request.files['file']
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
+    
+    file_path = f"/tmp/{file.filename}"
+    file.save(file_path)
+    file_url = upload_file_to_blob(file_path)
+    extracted_text = extract_text(file_url)
+    summary = summarize_text(extracted_text)
+    
+    return jsonify({"filename": file.filename, "summary": summary})
 
-    return jsonify({"message": "File received", "filename": file.filename})
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
-
